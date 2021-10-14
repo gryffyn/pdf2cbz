@@ -8,16 +8,23 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"math"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 
+	"github.com/cheggaaa/pb/v3"
 	"github.com/gen2brain/go-fitz"
 	"github.com/jessevdk/go-flags"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
-	"github.com/schollz/progressbar"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 )
+
+const tmpl = `{{ string . "prefix" | green}} {{counters . }} {{ bar . ("[" | green) ("=" | green) (">" | green) ("." | red) ("]" | green)}} {{percent . }} {{ string . "suffix" | green}}`
+var info bool
 
 func main() {
 	type Opts struct {
@@ -25,6 +32,7 @@ func main() {
 		PNG            bool   `short:"p" long:"png" description:"Outputs pages as PNG (default: jpeg)"`
 		CropDimensions string `short:"c" long:"crop" description:"Dimensions of the crop region (css shorthand, comma-delimited)"`
 		JPEGQuality    int    `short:"q" long:"quality" description:"JPEG quality (0-100)" default:"85"`
+		Debug          bool   `long:"debug" description:"enable debug printing"`
 		Positional     struct {
 			PDF string `positional-arg-name:"<INPUT PDF>"`
 			CBZ string `positional-arg-name:"<OUTPUT CBZ>"`
@@ -41,11 +49,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// fmt.Println("CROP: " + opts.CropDimensions)
+	// set up logging
+	zlog.Logger = zlog.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if opts.Debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
 
 	if !flags.WroteHelp(err) {
 		if opts.Images {
-			err = extractImages(opts.Positional.PDF, opts.Positional.CBZ, opts.CropDimensions)
+			err = extractImages(opts.Positional.PDF, opts.Positional.CBZ)
+			if err != nil {
+				log.Fatalln(err)
+			}
 		} else {
 			err = extractPages(opts.Positional.PDF, opts.Positional.CBZ, opts.PNG, opts.JPEGQuality, opts.CropDimensions)
 			if err != nil {
@@ -70,12 +86,12 @@ func extractPages(pdf, cbz string, usePNG bool, jpegQuality int, crop string) er
 
 	zWriter := zip.NewWriter(cFile)
 
-	bar := progressbar.New(doc.NumPage())
+	bar := pb.ProgressBarTemplate(tmpl).Start(doc.NumPage()-1)
 
 	for n := 0; n < doc.NumPage(); n++ {
 		img, err := doc.Image(n)
 		if err != nil {
-			return err
+			log.Println(err)
 		}
 
 		filetype := "jpg"
@@ -93,24 +109,30 @@ func extractPages(pdf, cbz string, usePNG bool, jpegQuality int, crop string) er
 			simg := cropImage(img, crop)
 			if usePNG {
 				err = png.Encode(f, simg)
+				if err != nil {
+					log.Println(err)
+				}
 			} else {
 				err = jpeg.Encode(f, simg, &jpeg.Options{Quality: jpegQuality})
+				if err != nil {
+					log.Println(err)
+				}
 			}
 		} else {
 			if usePNG {
 				err = png.Encode(f, img)
 				if err != nil {
-					return err
+					log.Println(err)
 				}
 			} else {
 				err = jpeg.Encode(f, img, &jpeg.Options{Quality: jpegQuality})
 				if err != nil {
-					return err
+					log.Println(err)
 				}
 			}
 		}
 
-		bar.Add(1)
+		bar.Set("suffix", path.Base(cbz)).Increment()
 	}
 
 	zWriter.Close()
@@ -119,7 +141,7 @@ func extractPages(pdf, cbz string, usePNG bool, jpegQuality int, crop string) er
 	return nil
 }
 
-func extractImages(pdf, cbz, crop string) error {
+func extractImages(pdf, cbz string) error {
 	cFile, err := os.Create(cbz)
 	if err != nil {
 		return err
@@ -132,10 +154,12 @@ func extractImages(pdf, cbz, crop string) error {
 	}
 
 	err = api.ExtractImagesFile(pdf, tmp, nil, pdfcpu.NewDefaultConfiguration())
+	if err != nil { return err }
 
 	files, err := os.ReadDir(tmp)
+	if err != nil { return err }
 
-	bar := progressbar.New(len(files))
+	bar := pb.ProgressBarTemplate(tmpl).Start(len(files)-1)
 
 	for _, file := range files {
 		f, err := os.Open(tmp + file.Name())
@@ -144,6 +168,7 @@ func extractImages(pdf, cbz, crop string) error {
 		}
 
 		info, err := file.Info()
+		if err != nil { return err }
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
 			return err
@@ -155,11 +180,11 @@ func extractImages(pdf, cbz, crop string) error {
 			return err
 		}
 		_, err = io.Copy(writer, f)
-		return err
+		if err != nil { return err }
 
 		f.Close()
 
-		bar.Add(1)
+		bar.Set("suffix", path.Base(cbz)).Increment()
 	}
 
 	zWriter.Close()
@@ -169,23 +194,50 @@ func extractImages(pdf, cbz, crop string) error {
 }
 
 func cropImage(img image.Image, dims string) image.Image {
-	dimsSlice := strSlicetoIntSlice(strings.Split(dims, ","))
-	cropRegion := image.Rect(dimsSlice[0] + img.Bounds().Min.X, dimsSlice[1] + img.Bounds().Min.Y,
-		img.Bounds().Max.X - dimsSlice[2], img.Bounds().Max.Y - dimsSlice[3])
+	dimsSlice := strSliceToFloat(strings.Split(dims, ","))
+
+	flWidth := float64(img.Bounds().Dx())
+	flHeight := float64(img.Bounds().Dy())
+	
+	topPer := int(math.Round(flHeight * (dimsSlice[0] / 100)))
+	rightPer := int(math.Round(flWidth - (flWidth * (dimsSlice[1] / 100))))
+	bottomPer := int(math.Round(flHeight - (flHeight * (dimsSlice[2] / 100))))
+	leftPer := int(math.Round(flWidth * (dimsSlice[3] / 100)))
+
+	minx := img.Bounds().Min.X
+	miny := img.Bounds().Min.Y
+	maxx := img.Bounds().Max.X
+	maxy := img.Bounds().Max.Y
+
+	cropRegion := image.Rect(leftPer, topPer, rightPer, bottomPer)
+
+	if getDebug() && !info {
+		zlog.Debug().Msgf("ORIGDIMS: %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+		zlog.Debug().Msgf("NEWDIMS: %dx%d", cropRegion.Dx(), cropRegion.Dy())
+		zlog.Debug().Msgf("CROP PERCENT: T: %d, R: %d, B: %d, L: %d", topPer, rightPer, bottomPer, leftPer)
+		zlog.Debug().Msgf("ORIGINAL: (%d,%d) x (%d,%d)", minx, miny, maxx, maxy)
+		zlog.Debug().Msgf("NEWCROP: (%d,%d) x (%d,%d)\n",
+			leftPer, topPer, rightPer, bottomPer)
+		info = true
+	}
+
 	crop := img.(interface {
 		SubImage(r image.Rectangle) image.Image
 	}).SubImage(cropRegion)
 
-	// fmt.Printf("ORIGINAL: (%d,%d) x (%d,%d) CROPPED: (%d,%d) x (%d,%d)", img.Bounds().Min.X, img.Bounds().Min.Y, img.Bounds().Max.X, img.Bounds().Max.Y, crop.Bounds().Min.X, crop.Bounds().Min.Y, crop.Bounds().Max.X, crop.Bounds().Max.Y)
-
 	return crop
 }
 
-func strSlicetoIntSlice(strs []string) []int {
-	var ints []int
+func strSliceToFloat(strs []string) []float64 {
+	var fl []float64
 	for _,v := range strs {
 		i, _ := strconv.Atoi(v)
-		ints = append(ints, i)
+		fl = append(fl, float64(i))
 	}
-	return ints
+	return fl
+}
+
+func getDebug() bool {
+	e := zlog.Debug()
+	return e.Enabled()
 }
