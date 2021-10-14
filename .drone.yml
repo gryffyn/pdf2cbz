@@ -1,0 +1,33 @@
+kind: pipeline
+name: default
+type: docker
+
+steps:
+  - name: lint
+    image: golang
+    failure: ignore
+    commands:
+      - wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
+      - golangci-lint run
+#  - name: test
+#    image: golang
+#    commands:
+#      - go test ./checksum/
+  - name: build
+    image: golang
+    commands:
+      - go build
+
+  - name: gitea_release
+    image: plugins/gitea-release
+    settings:
+      title: ${DRONE_TAG} Release
+      note: See CHANGELOG.md for details
+      api_key:
+        from_secret: gitea_token
+      base_url: https://git.neveris.one
+      files: pdf2cbz
+      checksum:
+        - sha256
+    when:
+      event: tag
