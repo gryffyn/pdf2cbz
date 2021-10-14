@@ -30,7 +30,7 @@ func main() {
 	type Opts struct {
 		Images         bool   `short:"i" long:"images" description:"Extracts images from PDF (default: extracts pages)"`
 		PNG            bool   `short:"p" long:"png" description:"Outputs pages as PNG (default: jpeg)"`
-		CropDimensions string `short:"c" long:"crop" description:"Dimensions of the crop region (css shorthand, comma-delimited)"`
+		CropDimensions string `short:"c" long:"crop" description:"Dimensions of the crop region (css shorthand, comma-delimited) in percent. Ex. '10,15,20,25' means 10% off the top, 15% off the right, so on"`
 		JPEGQuality    int    `short:"q" long:"quality" description:"JPEG quality (0-100)" default:"85"`
 		Debug          bool   `long:"debug" description:"enable debug printing"`
 		Positional     struct {
