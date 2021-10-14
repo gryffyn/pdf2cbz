@@ -1,4 +1,6 @@
 # pdf2cbz
+[![CodeQL](https://github.com/gryffyn/pdf2cbz/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/gryffyn/pdf2cbz/actions/workflows/codeql-analysis.yml)
+
 Converts PDF files to CBZ archives.
 
 ### A Word(s) of Warning
