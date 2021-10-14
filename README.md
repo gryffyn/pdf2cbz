@@ -1,5 +1,6 @@
 # pdf2cbz
 [![CodeQL](https://github.com/gryffyn/pdf2cbz/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/gryffyn/pdf2cbz/actions/workflows/codeql-analysis.yml)
+[![Build Status](https://ci.neveris.one/api/badges/gryffyn/pdf2cbz/status.svg?ref=refs/heads/main)](https://ci.neveris.one/gryffyn/pdf2cbz)
 
 Converts PDF files to CBZ archives.
 
@@ -8,7 +9,7 @@ Converts PDF files to CBZ archives.
 - the crop feature is quite limited at the minute, it's like 1 am and my brain can't handle doing the math for percentage right now, so you'll just have to guess for the pixel dimensions to crop off. I'll fix this soon, moving to percentage off each side instead of px.
 
 ## Building
-Requires CGO.
+Requires CGO, and uses the MuPDF Fitz library.
 
 ```
 git clone https://github.com/gryffyn/pdf2cbz
