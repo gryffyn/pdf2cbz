@@ -13,6 +13,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cheggaaa/pb/v3"
 	"github.com/gen2brain/go-fitz"
@@ -99,7 +100,7 @@ func extractPages(pdf, cbz string, usePNG bool, jpegQuality int, crop string) er
 			filetype = "png"
 		}
 
-		h := &zip.FileHeader{Name: fmt.Sprintf("page%04d.%s", n, filetype), Method: zip.Deflate}
+		h := &zip.FileHeader{Name: fmt.Sprintf("page%04d.%s", n, filetype), Method: zip.Deflate, Modified: time.Now()}
 		f, err := zWriter.CreateHeader(h)
 		if err != nil {
 			return err
