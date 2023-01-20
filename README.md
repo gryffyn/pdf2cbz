@@ -1,6 +1,6 @@
 # pdf2cbz
 [![CodeQL](https://github.com/gryffyn/pdf2cbz/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/gryffyn/pdf2cbz/actions/workflows/codeql-analysis.yml)
-[![Build Status](https://ci.neveris.one/api/badges/gryffyn/pdf2cbz/status.svg?ref=refs/heads/main)](https://ci.neveris.one/gryffyn/pdf2cbz)
+[![Build Status](https://ci.gryffyn.io/api/badges/gryffyn/pdf2cbz/status.svg?ref=refs/heads/main)](https://ci.gryffyn.io/gryffyn/pdf2cbz)
 
 Converts PDF files to CBZ archives.
 
